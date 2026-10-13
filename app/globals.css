@@ -1,26 +1,98 @@
 @import "tailwindcss";
 
+/* ---------- Color palette: change these to restyle the whole app ---------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #07040f;
+  --foreground: #f5f3ff;
+  --muted: #a5a0c0;
+
+  --surface: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.12);
+
+  --accent-1: #22d3ee; /* cyan */
+  --accent-2: #a855f7; /* purple */
+  --accent-3: #ef4444; /* red */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-accent-1: var(--accent-1);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+  --font-sans: var(--font-geist-sans), Arial, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Drifting colored glow (an element in layout.tsx, not a pseudo-element) */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 40rem at 15% 10%, rgba(168, 85, 247, 0.45), transparent 60%),
+    radial-gradient(35rem 35rem at 85% 20%, rgba(34, 211, 238, 0.35), transparent 60%),
+    radial-gradient(40rem 40rem at 50% 100%, rgba(239, 68, 68, 0.35), transparent 60%);
+  background-size: 160% 160%;
+  animation: aurora 20s ease-in-out infinite alternate;
+}
+
+@keyframes aurora {
+  from { background-position: 0% 0%; }
+  to   { background-position: 100% 100%; }
+}
+
+@keyframes shimmer {
+  to { background-position: 200% center; }
+}
+
+/* ---------- Reusable styles ---------- */
+.glass {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.text-gradient {
+  background-image: linear-gradient(
+    90deg,
+    var(--accent-1),
+    var(--accent-2),
+    var(--accent-3),
+    var(--accent-1)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 8s linear infinite;
+}
+
+.btn-gradient {
+  background-image: linear-gradient(135deg, var(--accent-2), var(--accent-1));
+  color: #07040f;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-gradient:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 30px -8px var(--accent-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora,
+  .text-gradient {
+    animation: none;
+  }
 }
