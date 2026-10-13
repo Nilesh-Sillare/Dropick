@@ -1,8 +1,5 @@
 import { supabase } from "./supabase";
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
 const CHUNK_SIZE = 16 * 1024; // 16 KB pieces
 const MAX_BUFFERED = 1024 * 1024; // pause sending if 1 MB is queued
 
@@ -17,6 +14,27 @@ export type FileMeta = { name: string; size: number; mime: string };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Builds the list of servers that help the two browsers connect:
+// a free STUN server, plus the TURN relay from NEXT_PUBLIC_ICE_SERVERS.
+function buildRtcConfig(): RTCConfiguration {
+  const iceServers: RTCIceServer[] = [
+    { urls: "stun:stun.l.google.com:19302" },
+  ];
+  const raw = process.env.NEXT_PUBLIC_ICE_SERVERS;
+
+  if (raw) {
+    try {
+      const extra = JSON.parse(raw);
+      if (Array.isArray(extra)) iceServers.push(...extra);
+    } catch {
+      console.error("[Dropick] NEXT_PUBLIC_ICE_SERVERS is not valid JSON");
+    }
+  }
+
+  console.log("[Dropick] ICE servers configured:", iceServers.length);
+  return { iceServers };
+}
+
 function openChannel(code: string) {
   return supabase.channel(`dropick-${code}`, {
     config: { broadcast: { self: false } },
@@ -24,14 +42,15 @@ function openChannel(code: string) {
 }
 type Channel = ReturnType<typeof openChannel>;
 
-// Creates the WebRTC connection and handles passing connection details
+// Creates the WebRTC connection and passes connection details
 // ("ICE candidates") back and forth through the Supabase channel.
 function createPeer(channel: Channel, onFail: () => void) {
-  const pc = new RTCPeerConnection(RTC_CONFIG);
+  const pc = new RTCPeerConnection(buildRtcConfig());
   const pending: RTCIceCandidateInit[] = [];
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
+      console.log("[Dropick] local candidate:", e.candidate.type);
       channel.send({
         type: "broadcast",
         event: "ice",
@@ -39,7 +58,15 @@ function createPeer(channel: Channel, onFail: () => void) {
       });
     }
   };
+  pc.onicecandidateerror = (e) => {
+    const ev = e as RTCPeerConnectionIceErrorEvent;
+    console.warn("[Dropick] ICE error:", ev.errorCode, ev.errorText, ev.url);
+  };
+  pc.oniceconnectionstatechange = () => {
+    console.log("[Dropick] ICE state:", pc.iceConnectionState);
+  };
   pc.onconnectionstatechange = () => {
+    console.log("[Dropick] connection state:", pc.connectionState);
     if (pc.connectionState === "failed") onFail();
   };
 
@@ -225,7 +252,8 @@ export function startReceiving(code: string, h: ReceiveHandlers) {
         const ch = e.channel;
         ch.binaryType = "arraybuffer";
         ch.onmessage = (ev) => handleMessage(ev.data);
-        ch.onclose = () => fail("The sender disconnected before the file finished.");
+        ch.onclose = () =>
+          fail("The sender disconnected before the file finished.");
       };
 
       await p.pc.setRemoteDescription(payload.sdp);
