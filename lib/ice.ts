@@ -1,6 +1,9 @@
 // Servers that help two browsers find each other (STUN) or relay data (TURN)
 export function getIceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+  const servers: RTCIceServer[] = [
+    { urls: "stun:stun.relay.metered.ca:80" },
+    { urls: "stun:stun.l.google.com:19302" },
+  ];
 
   const username = process.env.NEXT_PUBLIC_TURN_USERNAME;
   const credential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
@@ -16,6 +19,11 @@ export function getIceServers(): RTCIceServer[] {
       username,
       credential,
     });
+  } else {
+    console.warn(
+      "[ice] TURN credentials missing. Check NEXT_PUBLIC_TURN_USERNAME and NEXT_PUBLIC_TURN_CREDENTIAL in .env.local"
+    );
   }
+
   return servers;
 }
