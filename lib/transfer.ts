@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getIceServers } from "./ice";
 
 const CHUNK_SIZE = 16 * 1024; // 16 KB pieces
 const MAX_BUFFERED = 1024 * 1024; // pause sending if 1 MB is queued
@@ -14,23 +15,8 @@ export type FileMeta = { name: string; size: number; mime: string };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Builds the list of servers that help the two browsers connect:
-// a free STUN server, plus the TURN relay from NEXT_PUBLIC_ICE_SERVERS.
 function buildRtcConfig(): RTCConfiguration {
-  const iceServers: RTCIceServer[] = [
-    { urls: "stun:stun.l.google.com:19302" },
-  ];
-  const raw = process.env.NEXT_PUBLIC_ICE_SERVERS;
-
-  if (raw) {
-    try {
-      const extra = JSON.parse(raw);
-      if (Array.isArray(extra)) iceServers.push(...extra);
-    } catch {
-      console.error("[Dropick] NEXT_PUBLIC_ICE_SERVERS is not valid JSON");
-    }
-  }
-
+  const iceServers = getIceServers();
   console.log("[Dropick] ICE servers configured:", iceServers.length);
   return { iceServers };
 }

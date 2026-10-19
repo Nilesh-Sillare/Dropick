@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getIceServers } from "@/lib/ice";
 
 export default function DebugPage() {
   const [log, setLog] = useState<string[]>([]);
@@ -15,25 +16,14 @@ export default function DebugPage() {
   // What this build of the site knows (no secrets are shown)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const hasKey = Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  const rawIce = process.env.NEXT_PUBLIC_ICE_SERVERS;
+  const hasTurnUser = Boolean(process.env.NEXT_PUBLIC_TURN_USERNAME);
+  const hasTurnPass = Boolean(process.env.NEXT_PUBLIC_TURN_CREDENTIAL);
 
   let host = "MISSING";
   try {
     if (supabaseUrl) host = new URL(supabaseUrl).host;
   } catch {
     host = "INVALID URL";
-  }
-
-  let iceNote = "MISSING";
-  if (rawIce) {
-    try {
-      const parsed = JSON.parse(rawIce);
-      iceNote = Array.isArray(parsed)
-        ? `${parsed.length} entry (OK)`
-        : "not a list (wrong format)";
-    } catch {
-      iceNote = "INVALID JSON";
-    }
   }
 
   useEffect(() => {
@@ -88,15 +78,9 @@ export default function DebugPage() {
 
   // Asks the TURN relay for an address, using ONLY the relay.
   async function testTurn() {
-    if (!rawIce) {
-      add("TURN: NEXT_PUBLIC_ICE_SERVERS is missing in this build ❌");
-      return;
-    }
-    let servers: RTCIceServer[];
-    try {
-      servers = JSON.parse(rawIce);
-    } catch {
-      add("TURN: variable is not valid JSON ❌");
+    const servers = getIceServers();
+    if (servers.length < 2) {
+      add("TURN: username or password is missing in this build ❌");
       return;
     }
     add("TURN: testing the relay (8 seconds)…");
@@ -130,7 +114,8 @@ export default function DebugPage() {
       <div className="glass mt-6 space-y-1 rounded-2xl p-4 text-sm">
         <p>Supabase host: <b>{host}</b></p>
         <p>Supabase key present: <b>{hasKey ? "yes" : "NO"}</b></p>
-        <p>TURN servers variable: <b>{iceNote}</b></p>
+        <p>TURN username present: <b>{hasTurnUser ? "yes" : "NO"}</b></p>
+        <p>TURN password present: <b>{hasTurnPass ? "yes" : "NO"}</b></p>
         <p>This tab&apos;s ID: <b>{myId}</b></p>
       </div>
 
