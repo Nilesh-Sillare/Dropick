@@ -40,8 +40,8 @@ export default function Home() {
           Beam a file to <span className="text-gradient">any Device</span>
         </h1>
         <p className="mt-5 max-w-md text-muted">
-          Dropick connects two browsers directly. Your file never touches a
-          server — it travels peer to peer, end to end.
+          Dropick connects two browsers directly. Your files never touch a
+          server — they travel peer to peer, end to end.
         </p>
 
         {mode === "send" && <SendPanel onBack={goHome} />}
@@ -49,7 +49,7 @@ export default function Home() {
 
         {mode === "home" && (
           <div className="mt-12 grid w-full gap-4 text-left sm:grid-cols-2">
-            {/* Send */}
+            {/* Create a room */}
             <button
               type="button"
               onClick={() => setMode("send")}
@@ -58,18 +58,18 @@ export default function Home() {
               <div className="btn-gradient flex h-11 w-11 items-center justify-center rounded-xl">
                 <Upload size={20} />
               </div>
-              <h2 className="mt-8 font-semibold">Send a file</h2>
+              <h2 className="mt-8 font-semibold">Create a room</h2>
               <p className="mt-1 text-sm text-muted">
-                Get a 6-character code to share
+                Get a 6-character code, then share files
               </p>
             </button>
 
-            {/* Receive */}
+            {/* Join a room */}
             <div className="glass rounded-3xl p-6">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
                 <Download size={20} />
               </div>
-              <h2 className="mt-8 font-semibold">Receive a file</h2>
+              <h2 className="mt-8 font-semibold">Join a room</h2>
               <div className="mt-3 flex gap-2">
                 <input
                   value={code}
@@ -100,7 +100,7 @@ export default function Home() {
         )}
 
         <p className="mt-10 text-xs text-muted">
-          Both people must keep this tab open while the transfer runs.
+          Both people must keep this tab open while the room is active.
         </p>
 
         <CreatorCard />

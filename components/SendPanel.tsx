@@ -1,44 +1,82 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCircle2, Copy, FileUp } from "lucide-react";
+import { ArrowLeft, Check, Copy, FileUp } from "lucide-react";
 import { generateCode } from "@/lib/code";
 import { formatBytes } from "@/lib/format";
-import { startSending, type Status } from "@/lib/transfer";
+import {
+  startSending,
+  type FileInfo,
+  type RoomStatus,
+  type SenderFileState,
+  type SenderRoom,
+} from "@/lib/transfer";
+
+type Row = FileInfo & { state: SenderFileState; progress: number };
+
+const LABELS: Record<SenderFileState, string> = {
+  offered: "Waiting for the receiver",
+  queued: "Queued",
+  sending: "Sending",
+  sent: "Sent ✓",
+  declined: "Declined",
+  error: "Failed",
+};
 
 export default function SendPanel({ onBack }: { onBack: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
+  const [session, setSession] = useState(0);
   const [code, setCode] = useState<string | null>(null);
+  const [status, setStatus] = useState<RoomStatus>("waiting");
+  const [error, setError] = useState("");
+  const [rows, setRows] = useState<Row[]>([]);
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [status, setStatus] = useState<Status>("waiting");
-  const [error, setError] = useState("");
-  const [progress, setProgress] = useState(0);
+  const roomRef = useRef<SenderRoom | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const stopRef = useRef<(() => void) | null>(null);
 
-  // Stop everything when leaving this screen
   useEffect(() => {
-    return () => stopRef.current?.();
-  }, []);
+    let room: SenderRoom | undefined;
+    // The setTimeout stops React dev mode from starting the room twice
+    const t = setTimeout(() => {
+      const newCode = generateCode();
+      setCode(newCode);
+      room = startSending(newCode, {
+        onStatus: (s, msg) => {
+          setStatus(s);
+          if (msg) setError(msg);
+        },
+        onFileState: (id, state, progress) =>
+          setRows((prev) =>
+            prev.map((r) =>
+              r.id === id ? { ...r, state, progress: progress ?? r.progress } : r
+            )
+          ),
+      });
+      roomRef.current = room;
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      room?.stop();
+      roomRef.current = null;
+    };
+  }, [session]);
 
-  function pickFile(f: File | undefined) {
-    if (!f) return;
-    stopRef.current?.();
-    const newCode = generateCode();
-    setFile(f);
-    setCode(newCode);
+  function newRoom() {
+    setCode(null);
     setStatus("waiting");
     setError("");
-    setProgress(0);
-    stopRef.current = startSending(newCode, f, {
-      onStatus: (s, msg) => {
-        setStatus(s);
-        if (msg) setError(msg);
-      },
-      onProgress: (sent, total) =>
-        setProgress(total ? Math.round((sent / total) * 100) : 100),
-    });
+    setRows([]);
+    setSession((s) => s + 1);
+  }
+
+  function addFiles(list: FileList | null) {
+    if (!list || !roomRef.current) return;
+    const infos = roomRef.current.addFiles(Array.from(list));
+    if (!infos.length) return;
+    setRows((prev) => [
+      ...prev,
+      ...infos.map((i) => ({ ...i, state: "offered" as const, progress: 0 })),
+    ]);
   }
 
   async function copyCode() {
@@ -48,31 +86,81 @@ export default function SendPanel({ onBack }: { onBack: () => void }) {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  function reset() {
-    stopRef.current?.();
-    stopRef.current = null;
-    setFile(null);
-    setCode(null);
-    setStatus("waiting");
-  }
-
-  function goBack() {
-    reset();
-    onBack();
-  }
+  const connected = status === "connected";
 
   return (
     <div className="mx-auto mt-10 w-full max-w-lg text-left">
       <button
         type="button"
-        onClick={goBack}
+        onClick={onBack}
         className="mb-4 flex items-center gap-2 text-sm text-muted transition hover:text-foreground"
       >
         <ArrowLeft size={16} /> Back
       </button>
 
       <div className="glass rounded-3xl p-6">
-        {!file ? (
+        {/* Room code */}
+        <div className="text-center">
+          <p className="mb-2 text-xs uppercase tracking-widest text-muted">
+            Room code
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <span
+              className={`pl-[0.35em] font-bold tracking-[0.35em] ${
+                connected ? "text-2xl" : "text-4xl"
+              }`}
+            >
+              {code ?? "······"}
+            </span>
+            {code && (
+              <button
+                type="button"
+                onClick={copyCode}
+                aria-label="Copy code"
+                className="rounded-lg border border-border p-2 transition hover:border-accent-1"
+              >
+                {copied ? <Check size={18} /> : <Copy size={18} />}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Status */}
+        <div className="mt-5 flex flex-col items-center gap-3 text-center text-sm">
+          {status === "waiting" && (
+            <p className="flex items-center gap-2 text-muted">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-accent-1" />
+              Waiting for the receiver to join…
+            </p>
+          )}
+          {status === "connecting" && (
+            <p className="flex items-center gap-2 text-muted">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-accent-2" />
+              Receiver found. Connecting…
+            </p>
+          )}
+          {connected && (
+            <p className="flex items-center gap-2 text-muted">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Connected. Add files to share.
+            </p>
+          )}
+          {(status === "closed" || status === "error") && (
+            <>
+              <p className="text-accent-3">{error}</p>
+              <button
+                type="button"
+                onClick={newRoom}
+                className="btn-gradient rounded-lg px-4 py-2"
+              >
+                Create a new room
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Add files */}
+        {connected && (
           <div
             onClick={() => inputRef.current?.click()}
             onDragOver={(e) => {
@@ -83,91 +171,57 @@ export default function SendPanel({ onBack }: { onBack: () => void }) {
             onDrop={(e) => {
               e.preventDefault();
               setDragging(false);
-              pickFile(e.dataTransfer.files[0]);
+              addFiles(e.dataTransfer.files);
             }}
-            className={`flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-6 py-14 text-center transition ${
+            className={`mt-6 flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition ${
               dragging
                 ? "border-accent-1 bg-accent-1/10"
                 : "border-border hover:border-accent-2"
             }`}
           >
-            <FileUp size={28} className="text-accent-1" />
-            <p className="font-semibold">Drop a file here</p>
-            <p className="text-sm text-muted">or click to choose one</p>
+            <FileUp size={24} className="text-accent-1" />
+            <p className="font-semibold">Drop files here</p>
+            <p className="text-sm text-muted">
+              or click to choose. The receiver decides what to download.
+            </p>
             <input
               ref={inputRef}
               type="file"
+              multiple
               className="hidden"
-              onChange={(e) => pickFile(e.target.files?.[0])}
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+              }}
             />
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="max-w-full">
-              <p className="truncate font-semibold">{file.name}</p>
-              <p className="text-sm text-muted">{formatBytes(file.size)}</p>
-            </div>
+        )}
 
-            <div>
-              <p className="mb-2 text-xs uppercase tracking-widest text-muted">
-                Share this code
-              </p>
-              <div className="flex items-center gap-3">
-                <span className="text-gradient pl-[0.35em] text-4xl font-bold tracking-[0.35em]">
-                  {code}
-                </span>
-                <button
-                  type="button"
-                  onClick={copyCode}
-                  aria-label="Copy code"
-                  className="rounded-lg border border-border p-2 transition hover:border-accent-1"
-                >
-                  {copied ? <Check size={18} /> : <Copy size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Live status */}
-            {status === "waiting" && (
-              <p className="flex items-center gap-2 text-sm text-muted">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-accent-1" />
-                Waiting for the receiver to join…
-              </p>
-            )}
-            {status === "connecting" && (
-              <p className="flex items-center gap-2 text-sm text-muted">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-accent-2" />
-                Receiver found. Connecting…
-              </p>
-            )}
-            {status === "transferring" && (
-              <div className="w-full">
-                <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="btn-gradient h-full rounded-full transition-all"
-                    style={{ width: `${progress}%` }}
-                  />
+        {/* File list */}
+        {rows.length > 0 && (
+          <ul className="mt-4 space-y-2">
+            {rows.map((r) => (
+              <li key={r.id} className="rounded-xl border border-border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{r.name}</p>
+                    <p className="text-xs text-muted">{formatBytes(r.size)}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted">
+                    {r.state === "sending" ? `${r.progress}%` : LABELS[r.state]}
+                  </span>
                 </div>
-                <p className="mt-2 text-sm text-muted">Sending… {progress}%</p>
-              </div>
-            )}
-            {status === "done" && (
-              <p className="flex items-center gap-2 text-sm text-accent-1">
-                <CheckCircle2 size={18} /> File sent successfully
-              </p>
-            )}
-            {status === "error" && (
-              <p className="text-sm text-accent-3">{error}</p>
-            )}
-
-            <button
-              type="button"
-              onClick={reset}
-              className="text-sm text-muted underline transition hover:text-foreground"
-            >
-              {status === "done" ? "Send another file" : "Choose a different file"}
-            </button>
-          </div>
+                {r.state === "sending" && (
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="btn-gradient h-full rounded-full transition-all"
+                      style={{ width: `${r.progress}%` }}
+                    />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>
