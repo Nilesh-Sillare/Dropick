@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Send, Upload, Download } from "lucide-react";
 import SendPanel from "@/components/SendPanel";
 import ReceivePanel from "@/components/ReceivePanel";
+import CreatorCard from "@/components/CreatorCard";
 
 export default function Home() {
   const [mode, setMode] = useState<"home" | "send" | "receive">("home");
@@ -34,9 +35,9 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="mx-auto flex max-w-3xl flex-col items-center px-6 pt-24 text-center">
+      <section className="mx-auto flex max-w-3xl flex-col items-center px-6 pb-16 pt-24 text-center">
         <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl">
-          Beam a file to <span className="text-gradient">any browser</span>
+          Beam a file to <span className="text-gradient">any Device</span>
         </h1>
         <p className="mt-5 max-w-md text-muted">
           Dropick connects two browsers directly. Your file never touches a
@@ -101,6 +102,8 @@ export default function Home() {
         <p className="mt-10 text-xs text-muted">
           Both people must keep this tab open while the transfer runs.
         </p>
+
+        <CreatorCard />
       </section>
     </main>
   );
