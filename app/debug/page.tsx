@@ -1,136 +1,110 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { getIceServers } from "@/lib/ice";
+import { useState } from "react";
+import { Send, Upload, Download } from "lucide-react";
+import SendPanel from "@/components/SendPanel";
+import ReceivePanel from "@/components/ReceivePanel";
+import CreatorCard from "@/components/CreatorCard";
 
-export default function DebugPage() {
-  const [log, setLog] = useState<string[]>([]);
-  const [myId, setMyId] = useState("");
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const idRef = useRef("");
+export default function Home() {
+  const [mode, setMode] = useState<"home" | "send" | "receive">("home");
+  const [code, setCode] = useState("");
 
-  const add = (msg: string) =>
-    setLog((l) => [...l, `${new Date().toLocaleTimeString()}  ${msg}`]);
-
-  // What this build of the site knows (no secrets are shown)
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const hasKey = Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  const hasTurnUser = Boolean(process.env.NEXT_PUBLIC_TURN_USERNAME);
-  const hasTurnPass = Boolean(process.env.NEXT_PUBLIC_TURN_CREDENTIAL);
-
-  let host = "MISSING";
-  try {
-    if (supabaseUrl) host = new URL(supabaseUrl).host;
-  } catch {
-    host = "INVALID URL";
-  }
-
-  useEffect(() => {
-    const id = Math.random().toString(36).slice(2, 6);
-    idRef.current = id;
-    setMyId(id);
-    let channel: ReturnType<typeof supabase.channel> | undefined;
-
-    // setTimeout avoids a double-start in React dev mode
-    const t = setTimeout(() => {
-      channel = supabase.channel("dropick-debug", {
-        config: { broadcast: { self: false } },
-      });
-      channelRef.current = channel;
-      channel
-        .on("broadcast", { event: "ping" }, ({ payload }) => {
-          add(`Received ping from ${payload.from} ✅`);
-          channel?.send({
-            type: "broadcast",
-            event: "pong",
-            payload: { to: payload.from, from: id, t: payload.t },
-          });
-        })
-        .on("broadcast", { event: "pong" }, ({ payload }) => {
-          if (payload.to === id) {
-            add(`Got reply from ${payload.from} in ${Date.now() - payload.t} ms ✅`);
-          }
-        })
-        .subscribe((status) => add(`Channel status: ${status}`));
-    }, 0);
-
-    return () => {
-      clearTimeout(t);
-      if (channel) supabase.removeChannel(channel);
-      channelRef.current = null;
-    };
-  }, []);
-
-  function sendPing() {
-    const ch = channelRef.current;
-    if (!ch) {
-      add("Channel not ready yet");
-      return;
-    }
-    add("Ping sent. Waiting for another tab or device…");
-    ch.send({
-      type: "broadcast",
-      event: "ping",
-      payload: { from: idRef.current, t: Date.now() },
-    });
-  }
-
-  // Asks the TURN relay for an address, using ONLY the relay.
-  async function testTurn() {
-    const servers = getIceServers();
-    if (servers.length < 2) {
-      add("TURN: username or password is missing in this build ❌");
-      return;
-    }
-    add("TURN: testing the relay (8 seconds)…");
-    const pc = new RTCPeerConnection({
-      iceServers: servers,
-      iceTransportPolicy: "relay",
-    });
-    pc.createDataChannel("test");
-    let gotRelay = false;
-    pc.onicecandidate = (e) => {
-      if (e.candidate && e.candidate.type === "relay") {
-        gotRelay = true;
-        add("TURN: relay address obtained ✅ (login works)");
-      }
-    };
-    pc.onicecandidateerror = (e) => {
-      const ev = e as RTCPeerConnectionIceErrorEvent;
-      add(`TURN: error ${ev.errorCode} ${ev.errorText} (${ev.url})`);
-    };
-    await pc.setLocalDescription(await pc.createOffer());
-    setTimeout(() => {
-      if (!gotRelay) add("TURN: no relay address after 8 seconds ❌");
-      pc.close();
-    }, 8000);
+  function goHome() {
+    setMode("home");
+    setCode("");
   }
 
   return (
-    <main className="mx-auto max-w-xl px-6 py-10">
-      <h1 className="text-2xl font-bold">Dropick debug</h1>
-
-      <div className="glass mt-6 space-y-1 rounded-2xl p-4 text-sm">
-        <p>Supabase host: <b>{host}</b></p>
-        <p>Supabase key present: <b>{hasKey ? "yes" : "NO"}</b></p>
-        <p>TURN username present: <b>{hasTurnUser ? "yes" : "NO"}</b></p>
-        <p>TURN password present: <b>{hasTurnPass ? "yes" : "NO"}</b></p>
-        <p>This tab&apos;s ID: <b>{myId}</b></p>
-      </div>
-
-      <div className="mt-4 flex gap-3">
-        <button onClick={sendPing} className="btn-gradient rounded-lg px-4 py-2 text-sm">
-          Send ping
+    <main className="min-h-screen">
+      {/* Header */}
+      <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
+        <button
+          type="button"
+          onClick={goHome}
+          className="flex items-center gap-3"
+        >
+          <div className="btn-gradient flex h-9 w-9 items-center justify-center rounded-xl">
+            <Send size={16} />
+          </div>
+          <span className="text-lg font-semibold">Dropick</span>
         </button>
-        <button onClick={testTurn} className="btn-gradient rounded-lg px-4 py-2 text-sm">
-          Test TURN relay
-        </button>
-      </div>
+        <span className="glass rounded-full px-3 py-1 text-xs text-muted">
+          P2P · Encrypted · No uploads
+        </span>
+      </header>
 
-      <pre className="glass mt-4 min-h-40 whitespace-pre-wrap rounded-2xl p-4 text-xs">
-        {log.join("\n") || "Waiting…"}
-      </pre>
+      {/* Hero */}
+      <section className="mx-auto flex max-w-3xl flex-col items-center px-6 pb-16 pt-24 text-center">
+        <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl">
+          Beam a file to <span className="text-gradient">any Device</span>
+        </h1>
+        <p className="mt-5 max-w-md text-muted">
+          Dropick connects two browsers directly. Your file never touches a
+          server — it travels peer to peer, end to end.
+        </p>
+
+        {mode === "send" && <SendPanel onBack={goHome} />}
+        {mode === "receive" && <ReceivePanel code={code} onBack={goHome} />}
+
+        {mode === "home" && (
+          <div className="mt-12 grid w-full gap-4 text-left sm:grid-cols-2">
+            {/* Send */}
+            <button
+              type="button"
+              onClick={() => setMode("send")}
+              className="glass rounded-3xl p-6 text-left transition hover:-translate-y-1 hover:shadow-[0_0_40px_-10px_var(--accent-2)]"
+            >
+              <div className="btn-gradient flex h-11 w-11 items-center justify-center rounded-xl">
+                <Upload size={20} />
+              </div>
+              <h2 className="mt-8 font-semibold">Send a file</h2>
+              <p className="mt-1 text-sm text-muted">
+                Get a 6-character code to share
+              </p>
+            </button>
+
+            {/* Receive */}
+            <div className="glass rounded-3xl p-6">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
+                <Download size={20} />
+              </div>
+              <h2 className="mt-8 font-semibold">Receive a file</h2>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={code}
+                  onChange={(e) =>
+                    setCode(
+                      e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && code.length === 6)
+                      setMode("receive");
+                  }}
+                  maxLength={6}
+                  placeholder="CODE"
+                  className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-center text-sm tracking-[0.3em] outline-none placeholder:text-muted focus:border-accent-1"
+                />
+                <button
+                  type="button"
+                  disabled={code.length !== 6}
+                  onClick={() => setMode("receive")}
+                  className="btn-gradient rounded-lg px-4 py-2 text-sm disabled:opacity-40"
+                >
+                  Join
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <p className="mt-10 text-xs text-muted">
+          Both people must keep this tab open while the transfer runs.
+        </p>
+
+        <CreatorCard />
+      </section>
     </main>
   );
 }
