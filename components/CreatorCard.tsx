@@ -4,7 +4,7 @@ export default function CreatorCard() {
   return (
     <aside className="glass mx-auto mt-16 flex w-full max-w-sm items-center gap-4 rounded-2xl p-4 text-left">
       <Image
-        src="\P1.jpg""
+        src="/P1.jpg"
         alt="Nilesh S. Sillare"
         width={56}
         height={56}
